@@ -9,7 +9,7 @@ variables = {
 }
 
 selection = {
-    "probe" : "Muon_pt > 2 && abs(Muon_eta) < 2.4", # Muon_isStandalone
+    "probe" : "GeneralTrack_pt > 2 && abs(GeneralTrack_eta) < 2.4", # Muon_isStandalone
     "tag"   : "Muon_pt > 15 && abs(Muon_eta) < 2.4 &&  Muon_tightId", # Muon_isTrig
     "pair"  : "All_TPmass > 60" 
 }

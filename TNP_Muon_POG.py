@@ -120,49 +120,190 @@ def create_TnP_pairs(era, fileName=""):
     #print(total_filter)
     df = df.Filter(total_filter)
 
+
+    #### GeneralTracks collection
+    ####
+    #### Input  : pat::Muons, pat::packedPFCandidates, lostTracks
+    #### Output : Muons + Tracks (without muons)
+    ####
+
+    names = list(df.GetColumnNames())
+    suffix_muon = []
+    suffix_track = []
+    for name in names:
+        if str(name).startswith("Muon_"):
+            suffix_muon.append(str(name).split('Muon_')[1])
+        if str(name).startswith("Track_"):
+            suffix_track.append(str(name).split('Track_')[1])
+
+
+    # Match Tracks with muons
+    df = df.Define(
+        "Track_muonIdx",
+        "doMuonMatch(Muon_pt, Muon_eta, Muon_phi, Track_pt, Track_eta, Track_phi, 0.06, true, 0.05)"
+    )
+
+    # Remove the tracks already matched with a muon
+    df = df.Define(
+        "Track_cleanMask",
+        "Track_muonIdx<0"
+    )
+    
+    ###
+    ### Define a new collenction named CleanTrack
+    ###
+
+    for suffix in suffix_track:
+        df = df.Define(
+            f"CleanTrack_{suffix}",
+            f"Track_{suffix}[Track_cleanMask]"
+        )
+
+    ###
+    ### Merge Muons+CleanTracks in a GeneralTrack collection
+    ###
+
+    df = df.Define(
+        "GeneralTrack_pt",
+        "Concatenate(Muon_pt, CleanTrack_pt)"
+    )
+
+    df = df.Define("GeneralTrack_sorting", "sortedIndices(GeneralTrack_pt)")
+    df = df.Redefine("GeneralTrack_pt", "Take(GeneralTrack_pt, GeneralTrack_sorting)")
+
+    track_vars = ["eta", "phi", "dxy", "dz", "charge"]
+
+    for suffix in track_vars:
+        df = df.Define(
+            f"GeneralTrack_{suffix}",
+            f"Concatenate(Muon_{suffix}, CleanTrack_{suffix})"
+        )
+        df = df.Redefine(
+            f"GeneralTrack_{suffix}",
+            f"Take(GeneralTrack_{suffix}, GeneralTrack_sorting)"
+        )
+
+    df = df.Define(
+        "GeneralTrack_muonIdx",
+        "Concatenate((RVecI)Range(nMuon), RVecI(nTrack, -1))"
+    )
+    df = df.Redefine(
+        "GeneralTrack_muonIdx",
+        "Take(GeneralTrack_muonIdx, GeneralTrack_sorting)"
+    )
+
+    for var in track_vars:
+        suffix_muon.remove(var)
+    suffix_muon.remove("pt")
+        
+    ### Define Muon branches
+    for suffix in suffix_muon:
+        if "Bool" in df.GetColumnType(f"Muon_{suffix}") or suffix.startswith("is") or suffix.endswith("Id"):
+            df = df.Define(
+                f"GeneralTrack_{suffix}",
+                f"getMuonVars(GeneralTrack_muonIdx, Muon_{suffix}, 1)"
+            )
+        else:  
+            df = df.Define(
+                f"GeneralTrack_{suffix}",
+                f"getMuonVars(GeneralTrack_muonIdx, Muon_{suffix}, 0)"
+            )
+    
+            
     # just for utility
     df = df.Alias("Tag_pt",  "Muon_pt")
     df = df.Alias("Tag_eta", "Muon_eta")
     df = df.Alias("Tag_phi", "Muon_phi")
     df = df.Alias("Tag_charge", "Muon_charge")
     
-    
-    ### Match between TrigObj and Muon collections
-    df = df.Define("Muon_trigIdx", "CreateTrigIndex(Muon_eta, Muon_phi, TrigObj_eta, TrigObj_phi, 0.1)")
-    df = df.Define("Muon_isTrig", "Muon_trigIdx < 950")
-    df = df.Define("Muon_filterBits", "Take(TrigObj_filterBits, Muon_trigIdx, 0)")
-    df = df.Define("Muon_HLTIsoMu24", "(Muon_filterBits & 8) > 0")
-    
-    df = df.Alias("Tag_trigIdx", "Muon_trigIdx")
-    df = df.Alias("Tag_isTrig", "Muon_isTrig")
-    df = df.Alias("Tag_HLTIsoMu24", "Muon_HLTIsoMu24")
-    
-    ### Apply selection
-    df = df.Define("Tag_Muons",   selection["tag"])
-    df = df.Define("Probe_Muons", selection["probe"])
-    df = df.Define("All_TPPairs", "CreateTPPair(Tag_Muons, Probe_Muons, 1, Tag_charge, Muon_charge, 1)")
-    df = df.Define("All_TPmass","getTPVariables(All_TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 4)")
-    
-    massLow  =  60
-    massHigh = 120
-    
-    massCut = f"All_TPmass > {massLow} && All_TPmass < {massHigh}"
-    
-    df = df.Define("TPPairs", "All_TPPairs[%s]" % selection["pair"])
-    df = df.Filter("TPPairs.size() > 0")
-    
-    df = df.Define("pair_mass",  "All_TPmass[%s]" % selection["pair"])
-    df = df.Define("pair_pt","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 1)")
-    df = df.Define("pair_eta","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 2)")
-    df = df.Define("pair_phi","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 3)")
 
-    df = df.Define("npairs", "TPPairs.size()")
-    df = df.Define("nTag", "Sum(Tag_Muons==true)")
-    df = df.Define("probe_isDuplicated", "getDuplicatedProbes(TPPairs, Muon_pt)")
-    
-    ### Create probe branches
-    for var in variables["probe"]:
-        df = df.Define("probe_"+var, "getVariables(TPPairs, Muon_"+var+", 2)")
+    useGeneralTracks = True
+    if useGeneralTracks:
+        ### Match between TrigObj and Muon collections 
+        df = df.Define("Muon_trigIdx", "CreateTrigIndex(Muon_eta, Muon_phi, TrigObj_eta, TrigObj_phi, 0.1)")
+        df = df.Define("Muon_isTrig", "Muon_trigIdx < 950")
+        df = df.Define("Muon_filterBits", "Take(TrigObj_filterBits, Muon_trigIdx, 0)")
+        df = df.Define("Muon_HLTIsoMu24", "(Muon_filterBits & 8) > 0")
+
+        df = df.Define("GeneralTrack_trigIdx", "getMuonVars(GeneralTrack_muonIdx, Muon_trigIdx, 0)")
+        df = df.Define("GeneralTrack_isTrig", "getMuonVars(GeneralTrack_muonIdx, Muon_isTrig, 1)")
+        df = df.Define("GeneralTrack_filterBits", "getMuonVars(GeneralTrack_muonIdx, Muon_filterBits, 0)")
+        df = df.Define("GeneralTrack_HLTIsoMu24", "getMuonVars(GeneralTrack_muonIdx, Muon_HLTIsoMu24, 1)")
+        
+        df = df.Alias("Tag_trigIdx", "Muon_trigIdx")
+        df = df.Alias("Tag_isTrig", "Muon_isTrig")
+        df = df.Alias("Tag_HLTIsoMu24", "Muon_HLTIsoMu24")
+        
+        ### Apply selection
+        df = df.Define("Tag_Muons",   selection["tag"])
+        df = df.Define("Probe_Muons", selection["probe"])
+        df = df.Define("All_TPPairs", "CreateTPPair(Tag_Muons, Probe_Muons, 1, Tag_charge, GeneralTrack_charge, 0)")
+        df = df.Define("All_TPmass","getTPVariables(All_TPPairs, Tag_pt, Tag_eta, Tag_phi, GeneralTrack_pt, GeneralTrack_eta, GeneralTrack_phi, 4)")
+        
+        massLow  =  60
+        massHigh = 120
+        
+        massCut = f"All_TPmass > {massLow} && All_TPmass < {massHigh}"
+        
+        df = df.Define("TPPairs", "All_TPPairs[%s]" % selection["pair"])
+        df = df.Filter("TPPairs.size() > 0")
+        
+        df = df.Define("pair_mass",  "All_TPmass[%s]" % selection["pair"])
+        df = df.Define("pair_pt","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, GeneralTrack_pt, GeneralTrack_eta, GeneralTrack_phi, 1)")
+        df = df.Define("pair_eta","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, GeneralTrack_pt, GeneralTrack_eta, GeneralTrack_phi, 2)")
+        df = df.Define("pair_phi","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, GeneralTrack_pt, GeneralTrack_eta, GeneralTrack_phi, 3)")
+        
+        df = df.Define("npairs", "TPPairs.size()")
+        df = df.Define("nTag", "Sum(Tag_Muons==true)")
+        df = df.Define("probe_isDuplicated", "getDuplicatedProbes(TPPairs, GeneralTrack_pt)")
+        
+        ### Create probe branches
+        for var in variables["probe"]:
+            df = df.Define("probe_"+var, "getVariables(TPPairs, GeneralTrack_"+var+", 2)")
+            
+    else:
+        
+        ### Match between TrigObj and Muon collections
+        df = df.Define("Muon_trigIdx", "CreateTrigIndex(Muon_eta, Muon_phi, TrigObj_eta, TrigObj_phi, 0.1)")
+        df = df.Define("Muon_isTrig", "Muon_trigIdx < 950")
+        df = df.Define("Muon_filterBits", "Take(TrigObj_filterBits, Muon_trigIdx, 0)")
+        df = df.Define("Muon_HLTIsoMu24", "(Muon_filterBits & 8) > 0")
+        
+        df = df.Define("Muon_trigIdx", "CreateTrigIndex(Muon_eta, Muon_phi, TrigObj_eta, TrigObj_phi, 0.1)")
+        df = df.Define("Muon_isTrig", "Muon_trigIdx < 950")
+        df = df.Define("Muon_filterBits", "Take(TrigObj_filterBits, Muon_trigIdx, 0)")
+        df = df.Define("Muon_HLTIsoMu24", "(Muon_filterBits & 8) > 0")
+        
+        df = df.Alias("Tag_trigIdx", "Muon_trigIdx")
+        df = df.Alias("Tag_isTrig", "Muon_isTrig")
+        df = df.Alias("Tag_HLTIsoMu24", "Muon_HLTIsoMu24")
+        
+        ### Apply selection
+        df = df.Define("Tag_Muons",   selection["tag"])
+        df = df.Define("Probe_Muons", selection["probe"])
+        df = df.Define("All_TPPairs", "CreateTPPair(Tag_Muons, Probe_Muons, 1, Tag_charge, Muon_charge, 1)")
+        df = df.Define("All_TPmass","getTPVariables(All_TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 4)")
+        
+        massLow  =  60
+        massHigh = 120
+        
+        massCut = f"All_TPmass > {massLow} && All_TPmass < {massHigh}"
+        
+        df = df.Define("TPPairs", "All_TPPairs[%s]" % selection["pair"])
+        df = df.Filter("TPPairs.size() > 0")
+        
+        df = df.Define("pair_mass",  "All_TPmass[%s]" % selection["pair"])
+        df = df.Define("pair_pt","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 1)")
+        df = df.Define("pair_eta","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 2)")
+        df = df.Define("pair_phi","getTPVariables(TPPairs, Tag_pt, Tag_eta, Tag_phi, Muon_pt, Muon_eta, Muon_phi, 3)")
+        
+        df = df.Define("npairs", "TPPairs.size()")
+        df = df.Define("nTag", "Sum(Tag_Muons==true)")
+        df = df.Define("probe_isDuplicated", "getDuplicatedProbes(TPPairs, Muon_pt)")
+        
+        ### Create probe branches
+        for var in variables["probe"]:
+            df = df.Define("probe_"+var, "getVariables(TPPairs, Muon_"+var+", 2)")
         
     ### Create Tag branches
     for var in variables["tag"]:
@@ -206,7 +347,7 @@ def create_TnP_pairs(era, fileName=""):
     print("Time taken to create and save df_ak = ", (df_ak_time - loop_time))
     '''
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
-    
+        
     #######
     ####### Test chunck apporach with awkward 2.4!
     #######
@@ -228,6 +369,7 @@ def create_TnP_pairs(era, fileName=""):
         #if (i%10 == 0): print("Iteration: " + str(i))
         print("Iteration: " + str(i))
         _df = df.Range( i * chunksize, (i+1) * chunksize)
+            
         events = ak.from_rdataframe(_df, branches)
         
         def getBranchFlatten(events, branch):

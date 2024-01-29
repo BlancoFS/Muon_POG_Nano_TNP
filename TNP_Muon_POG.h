@@ -11,6 +11,11 @@
 using namespace ROOT;
 using namespace ROOT::VecOps;
 
+RVecI sortedIndices(RVecF variable){
+  // return sortedIndices based on variable
+  return Reverse(Argsort(variable));
+}
+
 RVecI CreateTrigIndex(const RVecF Muon_eta,
 		      const RVecF Muon_phi,
 		      const RVecF TrigObj_eta,
@@ -92,7 +97,7 @@ RVec<T> getVariables(RVec<std::pair<int,int>> TPPairs,
                      RVec<T>  &Cand_variable,
                      int option /*1 for tag, 2 for probe*/)
 {
-    RVec<T>  Variables(TPPairs.size(), 0);
+    RVec<T>  Variables(TPPairs.size(), 0);    
     for (int i = 0; i < TPPairs.size(); i++){
         std::pair<int, int> TPPair = TPPairs.at(i);
         T variable;
@@ -101,4 +106,62 @@ RVec<T> getVariables(RVec<std::pair<int,int>> TPPairs,
         Variables[i] = variable;
     }
     return Variables;
+}
+
+
+RVecI doMuonMatch(RVecF Muon_pt, RVecF Muon_eta, RVecF Muon_phi, RVecF Track_pt, RVecF Track_eta, RVecF Track_phi, float minDR=0.1, bool doRelPt=true, float minRelPt=0.1){
+  float tmp_dR = 999;
+  float dR = 999;
+  int candIdx = -1;
+  float tmp_RelPt = 999;
+  
+  RVecI Track_muonIdx(Track_pt.size(), -1);
+  
+  if (Track_pt.size()==0 || Muon_pt.size()==0){
+    return Track_muonIdx;
+  }
+  
+  for (int i=0; i<Track_pt.size(); i++){
+    tmp_dR = 999;
+    tmp_RelPt = 999;
+    dR = 999;
+    candIdx = -1;
+    
+    for (int j=0; j<Muon_pt.size(); j++){
+      
+      tmp_dR = sqrt((Muon_eta[j]-Track_eta[i])*(Muon_eta[j]-Track_eta[i])+(Muon_phi[j]-Track_phi[i])*(Muon_phi[j]-Track_phi[i]));
+      tmp_RelPt = (Muon_pt[j]-Track_pt[i])/Muon_pt[j];
+      
+      if (doRelPt){
+	if (tmp_dR<dR && tmp_dR<minDR && tmp_RelPt<minRelPt){
+	  dR = tmp_dR;
+	  candIdx = j;
+	}
+      }else{
+	if (tmp_dR<dR && tmp_dR<minDR){
+	  dR = tmp_dR;
+	  candIdx = j;
+	}
+      }
+    }
+    Track_muonIdx[i] = candIdx;
+  } 
+  return Track_muonIdx;
+}
+
+template <typename T>
+RVec<T> getMuonVars(RVecI GeneralTrack_muonIdx, RVec<T> Muon_var, int isBool){
+  RVec<T> GeneralTrack_var(GeneralTrack_muonIdx.size(), 0);
+  for (int i=0; i<GeneralTrack_muonIdx.size(); i++){
+    if (GeneralTrack_muonIdx[i]<0){
+      if (!isBool) GeneralTrack_var[i] = -99;
+      continue;
+    }
+    GeneralTrack_var[i] = Muon_var[GeneralTrack_muonIdx[i]];    
+  }
+  //cout << "--------------" << endl;
+  //cout << Muon_var << endl;
+  //cout << GeneralTrack_muonIdx << endl;
+  //cout << GeneralTrack_var << endl;
+  return GeneralTrack_var;
 }
