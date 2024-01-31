@@ -1,10 +1,10 @@
 ### Very first implementation of Muon TnP configurtion file
 variables = {
-    'probe' : ["charge", "pt", "eta", "dxy", "dz", "isTracker", "isStandalone", "isGlobal", "HLTIsoMu24", "tightId", "mediumId", "looseId", "highPtId", "pfIsoId", "pfAbsIso04_all"],
-    "tag"   : ["charge", "pt", "eta", "dxy", "dz", "isTracker", "isStandalone", "isGlobal", "HLTIsoMu24", "tightId", "mediumId", "looseId", "highPtId", "pfIsoId", "pfAbsIso04_all"],
+    'probe' : ["charge", "pt", "eta", "phi", "dxy", "dz", "isTracker", "isStandalone", "isGlobal", "HLTIsoMu24", "tightId", "mediumId", "looseId", "highPtId", "pfIsoId", "pfAbsIso04_all"],
+    "tag"   : ["charge", "pt", "eta", "phi", "dxy", "dz", "isTracker", "isStandalone", "isGlobal", "HLTIsoMu24", "tightId", "mediumId", "looseId", "highPtId", "pfIsoId", "pfAbsIso04_all"],
     "save"  : ["pair_mass","pair_pt","pair_eta","pair_phi","eventIdx",
-               "probe_charge","probe_pt","probe_eta","probe_isGlobal","probe_HLTIsoMu24","probe_dxy","probe_dz","probe_isTracker","probe_isStandalone","probe_tightId","probe_mediumId","probe_looseId","probe_highPtId","probe_pfIsoId","probe_pfAbsIso04_all",
-               "tag_charge","tag_pt","tag_eta","tag_isGlobal","tag_HLTIsoMu24","tag_dxy","tag_dz","tag_isTracker","tag_isStandalone","tag_tightId","tag_mediumId","tag_looseId","tag_highPtId","tag_pfIsoId","tag_pfAbsIso04_all",
+               "probe_charge","probe_pt","probe_eta","probe_isGlobal","probe_HLTIsoMu24","probe_dxy","probe_dz","probe_isTracker","probe_isStandalone","probe_tightId","probe_mediumId","probe_looseId","probe_highPtId","probe_pfIsoId","probe_pfAbsIso04_all","probe_phi",
+               "tag_charge","tag_pt","tag_eta","tag_isGlobal","tag_HLTIsoMu24","tag_dxy","tag_dz","tag_isTracker","tag_isStandalone","tag_tightId","tag_mediumId","tag_looseId","tag_highPtId","tag_pfIsoId","tag_pfAbsIso04_all","tag_phi",
                ],
 }
 
